@@ -1,0 +1,863 @@
+<!doctype html><html><head><meta charset=utf8><title>EK-RA8M2 USB DFU Guide</title><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<meta name="claude:viewport-fit-sides" content="cover">
+<script>
+/* Inline OS tabs, like the language tabs in API docs: every block that differs between Windows and Linux has its
+   own Windows | Linux tabs. Picking one switches all of them and is remembered in this browser (?os=win|linux wins). */
+(function () {
+  var root = document.documentElement, KEY = "guide-host";
+  function pick(h) {
+    root.setAttribute("data-host", h);
+    document.querySelectorAll(".ost-bar button").forEach(function (b) {
+      var on = b.getAttribute("data-host") === h;
+      b.setAttribute("aria-selected", on ? "true" : "false");
+      b.tabIndex = on ? 0 : -1;
+    });
+  }
+  var h = null;
+  var q = /[?&]os=(win|linux)\b/.exec(location.search);
+  if (q) h = q[1];
+  if (!h) { try { h = localStorage.getItem(KEY); } catch (e) {} }
+  if (h !== "win" && h !== "linux") {
+    var p = (navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || "";
+    h = /linux/i.test(p) && !/android/i.test(navigator.userAgent) ? "linux" : "win";
+  }
+  pick(h);
+  function choose(b) {
+    var v = b.getAttribute("data-host");
+    if (v === root.getAttribute("data-host")) return;
+    /* Keep the clicked tab where it is on screen while blocks above it change height. */
+    var top = b.getBoundingClientRect().top;
+    pick(v);
+    window.scrollBy({ top: b.getBoundingClientRect().top - top, behavior: "instant" });
+    try { localStorage.setItem(KEY, v); } catch (e) {}
+  }
+  document.addEventListener("click", function (e) {
+    var b = e.target.closest(".ost-bar button");
+    if (b) choose(b);
+  });
+  document.addEventListener("keydown", function (e) {
+    var b = e.target.closest && e.target.closest(".ost-bar button");
+    if (!b || (e.key !== "ArrowLeft" && e.key !== "ArrowRight")) return;
+    var o = b.parentNode.querySelector('button[data-host="' + (b.getAttribute("data-host") === "win" ? "linux" : "win") + '"]');
+    e.preventDefault(); choose(o); o.focus();
+  });
+  document.addEventListener("DOMContentLoaded", function () { pick(root.getAttribute("data-host")); });
+})();
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap">
+<style>
+/* Layout: a bench manual, same family as Part 1 (sticky contents rail, one reading column, numbered sections).
+   Part 2 of the upload-methods series. Its own accent: teal. */
+:root {
+  --bg: #f3f7f7;
+  --surface: #ffffff;
+  --ink: #142424;
+  --muted: #536665;
+  --line: #d3dfde;
+  --line-strong: #94a9a7;
+  --accent: #0e6b6b;
+  --accent-soft: #e1f0ef;
+  --ok: #2e7a4d; --ok-soft: #dcefe2;
+  --bad: #b23a48; --bad-soft: #f6dbde;
+  --warn-bg: #fff4dd; --warn-line: #d8a33c;
+  --led-blue: #2c62a0; --led-green: #2e7a4d; --led-red: #b23a48;
+  --sans: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --cond: "IBM Plex Sans Condensed", "Arial Narrow", "IBM Plex Sans", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0d1414; --surface: #141c1c; --ink: #e1ecea; --muted: #95aaa8; --line: #2a3837; --line-strong: #4d605e;
+  --accent: #5cc6c0; --accent-soft: #163232; --ok: #62c18a; --ok-soft: #173323; --bad: #e27e8b; --bad-soft: #3a1d23;
+  --warn-bg: #2f2612; --warn-line: #b8892e; --led-blue: #74a8e2; --led-green: #62c18a; --led-red: #e27e8b; color-scheme: dark;
+} }
+:root[data-theme="dark"] {
+  --bg: #0d1414; --surface: #141c1c; --ink: #e1ecea; --muted: #95aaa8; --line: #2a3837; --line-strong: #4d605e;
+  --accent: #5cc6c0; --accent-soft: #163232; --ok: #62c18a; --ok-soft: #173323; --bad: #e27e8b; --bad-soft: #3a1d23;
+  --warn-bg: #2f2612; --warn-line: #b8892e; --led-blue: #74a8e2; --led-green: #62c18a; --led-red: #e27e8b; color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; scroll-padding-top: 16px; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+body { background: var(--bg); color: var(--ink); font: 16px/1.6 var(--sans); margin: 0;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 0 72px; }
+a { color: var(--accent); text-underline-offset: 2px; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+code { font-family: var(--mono); font-size: 0.86em; background: var(--accent-soft); padding: 0.05em 0.35em; border-radius: 3px; overflow-wrap: anywhere; }
+.menu { font-weight: 600; }
+b, strong { font-weight: 600; }
+
+.shell { max-width: 1160px; margin: 0 auto; display: grid; grid-template-columns: 230px minmax(0, 1fr); gap: 44px; }
+@media (max-width: 960px) { .shell { grid-template-columns: minmax(0, 1fr); gap: 0; } .rail { display: none; } }
+
+.rail { position: sticky; top: env(safe-area-inset-top, 0px); align-self: start; padding-top: 36px; max-height: 100vh; overflow-y: auto; padding-bottom: 24px; }
+.rail h2, .mtoc summary { font: 600 11px/1 var(--cond); letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); margin: 0 0 12px; }
+.toc { list-style: none; margin: 0; padding: 0; display: grid; gap: 1px; }
+.toc a { display: grid; grid-template-columns: 2.6em minmax(0, 1fr); padding: 4px 8px; border-left: 2px solid var(--line); color: var(--ink); text-decoration: none; font-size: 13.5px; line-height: 1.3; }
+.toc a .n { font: 12px var(--mono); color: var(--muted); }
+.toc a:hover { border-left-color: var(--accent); }
+.toc a.cur { border-left-color: var(--accent); background: var(--accent-soft); }
+.mtoc { display: none; margin-top: 18px; border: 1px solid var(--line); border-radius: 5px; background: var(--surface); padding: 10px 12px; }
+.mtoc summary { cursor: pointer; margin: 0; }
+.mtoc .toc { margin-top: 10px; }
+@media (max-width: 960px) { .mtoc { display: block; } }
+
+main { min-width: 0; max-width: 820px; }
+
+header.hero { padding-block: 30px 8px; }
+.eyebrow { font: 600 12px/1 var(--cond); letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent); margin: 0 0 10px; }
+h1 { font: 600 clamp(30px, 5vw, 42px)/1.08 var(--cond); margin: 0 0 12px; text-wrap: balance; letter-spacing: -0.01em; }
+.lede { color: var(--muted); max-width: 64ch; margin: 0; }
+.meta { display: flex; flex-wrap: wrap; gap: 6px 8px; margin-top: 14px; }
+.chip { font: 500 11.5px/1 var(--mono); padding: 5px 7px; border: 1px solid var(--line); border-radius: 3px; color: var(--muted); background: var(--surface); white-space: nowrap; }
+.chip.ok { border-color: var(--ok); color: var(--ok); background: var(--ok-soft); }
+.chip.todo { border-color: var(--warn-line); color: var(--ink); background: var(--warn-bg); }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
+.btn { font: 500 14px var(--sans); padding: 7px 13px; border-radius: 4px; border: 1px solid var(--line-strong); background: var(--surface); color: var(--ink); text-decoration: none; }
+.btn:hover { border-color: var(--accent); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--surface); }
+
+section { padding-top: 34px; }
+h2.sec { font: 600 26px/1.15 var(--cond); margin: 0 0 4px; padding-bottom: 8px; border-bottom: 2px solid var(--ink); display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 12px; align-items: baseline; text-wrap: balance; }
+h2.sec .n { font: 500 15px var(--mono); color: var(--accent); }
+h4 { font: 600 13px/1.2 var(--cond); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin: 22px 0 6px; }
+.src { font: 12.5px var(--mono); color: var(--muted); margin: 6px 0 0; }
+p, ul, ol { max-width: 68ch; }
+section p { margin: 12px 0 0; }
+ol.steps, ul.plain { margin: 12px 0 0; padding-left: 1.5em; }
+ol.steps > li, ul.plain > li { padding-left: 4px; margin-top: 8px; }
+ol.steps > li::marker { font: 500 14px var(--mono); color: var(--accent); }
+li > p { margin: 6px 0 0; }
+.callout { border-left: 3px solid var(--warn-line); background: var(--warn-bg); padding: 12px 16px; margin: 16px 0 0; border-radius: 0 4px 4px 0; max-width: 72ch; }
+.callout p { margin: 0; }
+.callout p + p { margin-top: 8px; }
+.callout.info { border-left-color: var(--accent); background: var(--accent-soft); }
+.callout.stop { border-left-color: var(--bad); background: var(--bad-soft); }
+pre { margin: 10px 0 0; background: var(--surface); border: 1px solid var(--line); border-radius: 5px; padding: 10px 12px; overflow-x: auto; font: 13px/1.5 var(--mono); max-width: 100%; }
+pre .c { color: var(--muted); }
+pre.out { background: var(--bg); }
+.tw { overflow-x: auto; border: 1px solid var(--line); border-radius: 5px; background: var(--surface); margin-top: 12px; }
+table { border-collapse: collapse; width: 100%; font-size: 14px; line-height: 1.45; }
+th, td { text-align: left; vertical-align: top; padding: 7px 10px; border-bottom: 1px solid var(--line); }
+th { font: 600 11.5px var(--cond); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); background: var(--bg); white-space: nowrap; }
+tr:last-child td { border-bottom: 0; }
+td.m { font-family: var(--mono); font-size: 12.5px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+td code { white-space: nowrap; }
+td.wrap code { white-space: normal; }
+tr.hl td { background: var(--warn-bg); }
+
+/* MRAM map: block heights to scale, 0x10000 (64 KB) = one unit */
+.mapwrap { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px 28px; margin-top: 16px; align-items: start; }
+@media (max-width: 640px) { .mapwrap { grid-template-columns: minmax(0, 1fr); } }
+figure { margin: 0; min-width: 0; }
+figcaption { font: 600 11px/1.2 var(--cond); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
+.mram { display: grid; grid-template-columns: 7.2em minmax(0, 1fr); font-size: 13px; }
+.mram .addr { font: 12px/1 var(--mono); color: var(--muted); font-variant-numeric: tabular-nums; padding-top: 3px; border-top: 1px solid var(--line-strong); }
+.mram .blk { --u: 24px; min-height: calc(var(--h) * var(--u)); border: 1px solid var(--line-strong); border-bottom: 0; padding: 4px 8px; display: flex; flex-direction: column; justify-content: center; line-height: 1.25; }
+.mram .blk span { font-size: 12px; color: var(--muted); }
+.mram .boot { background: var(--accent-soft); }
+.mram .hdr { background: var(--bg); justify-content: center; font-size: 11.5px; color: var(--muted); padding-block: 1px; }
+.mram .pri { background: var(--ok-soft); }
+.mram .secd { background: var(--warn-bg); }
+.mram .end { border-top: 1px solid var(--line-strong); }
+ol.flow { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; counter-reset: f; }
+ol.flow li { counter-increment: f; display: grid; grid-template-columns: 1.8em minmax(0, 1fr); gap: 8px; font-size: 14.5px; line-height: 1.45; background: var(--surface); border: 1px solid var(--line); border-radius: 4px; padding: 7px 10px; }
+ol.flow li::before { content: counter(f); font: 500 13px/1.45 var(--mono); color: var(--accent); }
+ol.flow li .who { font: 600 11px var(--cond); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); display: block; }
+
+/* LED dots */
+.led { display: inline-block; width: 0.8em; height: 0.8em; border-radius: 50%; vertical-align: -0.05em; margin-right: 6px; border: 1px solid var(--line-strong); }
+.led.blue { background: var(--led-blue); } .led.green { background: var(--led-green); } .led.red { background: var(--led-red); }
+
+/* Series bar, shared with Part 1 */
+.series { max-width: 1160px; margin: 0 auto; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding-block: 10px; border-bottom: 1px solid var(--line); font-size: 13.5px; }
+.series .slbl { font: 600 11px/1 var(--cond); letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); margin-right: 4px; }
+.series a, .series span.cur { display: inline-flex; gap: 6px; align-items: baseline; padding: 4px 9px; border: 1px solid var(--line); border-radius: 4px; color: var(--ink); text-decoration: none; background: var(--surface); }
+.series a:hover { border-color: var(--accent); }
+.series .pn { font: 500 12px var(--mono); color: var(--muted); }
+.series span.cur { border-color: var(--accent); background: var(--accent-soft); font-weight: 600; }
+.series span.cur .pn { color: var(--accent); }
+
+/* Inline OS tabs. Only the chosen system's pane is shown; with no script both stay visible. */
+:root[data-host="win"] .os-linux, :root[data-host="linux"] .os-win { display: none !important; }
+.ost { margin: 12px 0 0; border: 1px solid var(--line); border-radius: 5px; background: var(--surface); max-width: 72ch; }
+.ost-bar { display: flex; flex-wrap: wrap; align-items: stretch; border-bottom: 1px solid var(--line); background: var(--bg); border-radius: 5px 5px 0 0; padding: 0 6px; }
+.ost-bar button { all: unset; cursor: pointer; font: 500 13px/1 var(--sans); padding: 9px 12px 8px; color: var(--muted); border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.ost-bar button:hover { color: var(--ink); }
+.ost-bar button[aria-selected="true"] { color: var(--ink); font-weight: 600; border-bottom-color: var(--accent); }
+.ost-bar button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.ost-note { margin-left: auto; align-self: center; font: 500 11px/1 var(--mono); padding: 3px 5px; border: 1px solid var(--warn-line); border-radius: 3px; background: var(--warn-bg); color: var(--ink); white-space: nowrap; }
+.ost-pane { padding: 0 14px 14px; }
+.ost-pane > :first-child { margin-top: 12px; }
+.ost-pane pre { background: var(--bg); }
+.ost-pane td code { white-space: normal; }
+.ost-pane ol.steps, .ost-pane ul.plain { padding-left: 1.3em; }
+.callout .ost { background: var(--surface); }
+li > .ost { margin-top: 8px; }
+.ostag { font: 600 11px/1 var(--mono); padding: 3px 5px; border: 1px solid var(--ok); border-radius: 3px; color: var(--ok); background: var(--ok-soft); white-space: nowrap; vertical-align: 1px; }
+
+footer { margin-top: 48px; padding-top: 14px; border-top: 1px solid var(--line); font-size: 13.5px; color: var(--muted); display: grid; gap: 8px; }
+footer p { margin: 0; max-width: 72ch; }
+</style>
+
+<style id="rk-style">
+/* Home bar and reading progress, shared by every page linked from the hub. Uses the page's own color tokens. */
+.rk-bar { max-width: 1160px; margin: 0 auto; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; padding-block: 12px 10px; border-bottom: 1px solid var(--line); font: 500 13px/1.4 var(--mono, var(--font-mono, ui-monospace, monospace)); color: var(--muted); }
+.rk-home { color: var(--accent); text-decoration: none; }
+.rk-home:hover { text-decoration: underline; text-underline-offset: 3px; }
+.rk-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; margin-left: auto; }
+.rk-done { color: var(--ok, var(--accent)); }
+.rk-btn { font: inherit; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 4px; padding: 3px 10px; cursor: pointer; }
+.rk-btn:hover { border-color: var(--accent); color: var(--accent); }
+.rk-btn:focus-visible, .rk-home:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.rk-prog { position: fixed; top: 0; left: 0; right: 0; z-index: 60; padding-top: env(safe-area-inset-top, 0px); pointer-events: none; }
+.rk-prog i { display: block; height: 3px; background: var(--accent); transform-origin: 0 50%; transform: scaleX(0); }
+</style>
+<div class="rk-prog" aria-hidden="true"><i id="rk-fill"></i></div>
+<nav class="rk-bar" aria-label="Project pages">
+  <a class="rk-home" href="https://claude.ai/artifact/JnmVZqVtoJ36okfvaU4nsB" target="_blank" rel="noopener">← All pages</a>
+  <span class="rk-meta">
+    <span>19 min read</span>
+    <span id="rk-state" aria-live="polite">Not started</span>
+    <button type="button" class="rk-btn" id="rk-resume" hidden>Resume</button>
+    <button type="button" class="rk-btn" id="rk-toggle">Mark as read</button>
+  </span>
+</nav>
+<nav class="series" aria-label="Series: MCUboot upload methods on the EK-RA8M2">
+  <span class="slbl">MCUboot upload methods</span>
+  <a href="https://claude.ai/artifact/Ufz8vLw3LGDswtSXg8czHB" target="_blank" rel="noopener"><span class="pn">1</span>Debugger</a>
+  <span class="cur" aria-current="page"><span class="pn">2</span>USB DFU</span>
+  <a href="https://claude.ai/artifact/GQ3n3kea4fok17vFq3JG1w" target="_blank" rel="noopener"><span class="pn">3</span>ROM boot</a>
+  <a href="https://claude.ai/artifact/1i2qwNCvVN1idSvFSBngf6" target="_blank" rel="noopener"><span class="pn">4</span>Serial recovery</a>
+  <a href="https://claude.ai/artifact/E7Pf2dBwFP1iX1XkP79pXx" target="_blank" rel="noopener"><span class="pn">5</span>XMODEM</a>
+  <a href="https://claude.ai/artifact/VG78ZSc8kS8kEgygb92UuY" target="_blank" rel="noopener"><span class="pn">6</span>USB drive (UF2)</a>
+  <a href="https://claude.ai/artifact/DrJr1Bh6q3q4KPME5D12qa" target="_blank" rel="noopener"><span class="pn">7</span>USB HID</a>
+  <a href="https://claude.ai/artifact/Q22fu6RWpNp12uoieg5MMK" target="_blank" rel="noopener"><span class="pn">8</span>SMP (mcumgr)</a>
+  <a href="https://claude.ai/artifact/HeuVWhMHh4VUS5QjVXyZpQ" target="_blank" rel="noopener"><span class="pn">9</span>Ethernet</a>
+  <a href="https://claude.ai/artifact/7jm7NEG45LjouUiqr5iBfk" target="_blank" rel="noopener"><span class="pn">10</span>CAN FD (UDS)</a>
+  <a href="https://claude.ai/artifact/C1Hnh468DfR1kCDu5YR3uz" target="_blank" rel="noopener"><span class="pn">11</span>USB stick / SD</a>
+  <a href="https://claude.ai/artifact/4wWgfiXA8YbbxfBZ4fXfaW" target="_blank" rel="noopener"><span class="pn">12</span>Production</a>
+</nav>
+<script>
+(function () {
+  var PAGE = "dfu", KEY = "rk-reading:" + PAGE;
+  /* Auto-read needs both: scrolled to the very end, and active reading time of half the estimate
+     (counted only while the tab is visible and the reader moved, scrolled or typed in the last 90 s). */
+  var NEED = 570;
+  var st = { max: 0, pos: 0, read: false, readAt: "", at: "", secs: 0 };
+  var fill = document.getElementById("rk-fill"), stateEl = document.getElementById("rk-state");
+  var resumeBtn = document.getElementById("rk-resume"), toggleBtn = document.getElementById("rk-toggle");
+  var ref = null, chain = Promise.resolve(), dirty = false, timer = null, ticking = false, noAuto = false, scrolled = false;
+
+  function merge(o) {
+    if (!o || typeof o !== "object") return;
+    var max = Math.max(st.max, +o.max || 0), secs = Math.max(st.secs, +o.secs || 0);
+    if (String(o.at || "") >= st.at) {
+      st.pos = Math.min(100, Math.max(0, +o.pos || 0)); st.read = !!o.read;
+      st.readAt = String(o.readAt || ""); st.at = String(o.at || "");
+    }
+    st.max = Math.min(100, max);
+    st.secs = Math.min(86400, secs);
+  }
+  try { merge(JSON.parse(localStorage.getItem(KEY) || "null")); } catch (e) {}
+
+  function span() { return document.documentElement.scrollHeight - window.innerHeight; }
+  function frac() { var h = span(); return h > 0 ? Math.min(1, Math.max(0, window.scrollY / h)) : 0; }
+  function day(s) { try { return new Date(s).toLocaleDateString([], { month: "short", day: "numeric" }); } catch (e) { return ""; } }
+
+  function render() {
+    var m = function (x) { return Math.floor(x / 60); };
+    stateEl.textContent = st.read ? "✓ Read" + (st.readAt ? " " + day(st.readAt) : "")
+      : st.max > 0 || st.secs >= 60 ? st.max + "% read · " + m(Math.min(st.secs, NEED)) + " of " + m(NEED) + " min" : "Not started";
+    stateEl.title = st.read ? "" : "Marked read on its own once you reach the end and have spent " + m(NEED) + " minutes reading.";
+    stateEl.classList.toggle("rk-done", st.read);
+    toggleBtn.textContent = st.read ? "Mark unread" : "Mark as read";
+  }
+  function offerResume() {
+    var p = Math.round(frac() * 100);
+    resumeBtn.hidden = scrolled || st.pos < 5 || st.pos > 95 || p >= st.pos - 3;
+    resumeBtn.textContent = "Resume at " + st.pos + "%";
+  }
+  function save() {
+    clearTimeout(timer);
+    if (!dirty) return;
+    dirty = false;
+    var body = { max: st.max, pos: st.pos, read: st.read, readAt: st.readAt, at: st.at, secs: st.secs };
+    try { localStorage.setItem(KEY, JSON.stringify(body)); } catch (e) {}
+    if (ref) chain = chain.then(function () { return ref.set(body); }).catch(function () {});
+  }
+  function changed(now) {
+    st.at = new Date().toISOString(); dirty = true; render();
+    clearTimeout(timer);
+    if (now) save(); else timer = setTimeout(save, 3000);
+  }
+  function onScroll() {
+    ticking = false;
+    var f = frac(), p = Math.round(f * 100);
+    fill.style.transform = "scaleX(" + f + ")";
+    if (window.scrollY > 120) scrolled = true;
+    if (!resumeBtn.hidden && (scrolled || p >= st.pos - 3)) resumeBtn.hidden = true;
+    var c = false;
+    if (p > st.max) { st.max = p; c = true; }
+    if (Math.abs(p - st.pos) >= 2) { st.pos = p; c = true; }
+    if (done()) c = true;
+    if (c) changed(false);
+  }
+  function done() {
+    if (st.read || noAuto || st.max < 100 || st.secs < NEED) return false;
+    st.read = true; st.readAt = new Date().toISOString();
+    return true;
+  }
+  var lastAct = Date.now();
+  ["scroll", "wheel", "keydown", "pointermove", "pointerdown", "touchstart"].forEach(function (ev) {
+    window.addEventListener(ev, function () { lastAct = Date.now(); }, { passive: true });
+  });
+  setInterval(function () {
+    if (document.visibilityState !== "visible" || Date.now() - lastAct > 90000) return;
+    st.secs += 5;
+    if (done()) changed(true);
+    else if (st.secs % 30 === 0) changed(false);
+  }, 5000);
+  window.addEventListener("scroll", function () { if (!ticking) { ticking = true; requestAnimationFrame(onScroll); } }, { passive: true });
+  window.addEventListener("resize", function () { fill.style.transform = "scaleX(" + frac() + ")"; });
+  document.addEventListener("visibilitychange", function () { if (document.visibilityState === "hidden") save(); });
+  window.addEventListener("pagehide", save);
+
+  toggleBtn.addEventListener("click", function () {
+    st.read = !st.read; st.readAt = st.read ? new Date().toISOString() : "";
+    noAuto = !st.read;
+    changed(true);
+  });
+  resumeBtn.addEventListener("click", function () {
+    var reduce = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
+    window.scrollTo({ top: st.pos / 100 * span(), behavior: reduce ? "auto" : "smooth" });
+    resumeBtn.hidden = true; scrolled = true;
+  });
+
+  render(); offerResume();
+
+  var c = window.claude;
+  if (c && typeof c.use === "function") {
+    Promise.all([c.use("user"), c.use("db")]).then(function (r) {
+      var u = r[0], d = r[1];
+      if (!u || !d) return;
+      return u.id().then(function (id) {
+        if (!id) return;
+        var docRef = d.doc("reading/" + id);
+        return docRef.get().then(function (snap) {
+          var remote = snap.exists ? snap.data() || {} : null;
+          merge(remote);
+          ref = docRef;
+          if (st.at && (!remote || st.at > String(remote.at || ""))) { dirty = true; save(); }
+          render(); offerResume();
+        });
+      });
+    }).catch(function () {});
+  }
+})();
+</script>
+
+<div class="shell">
+<nav class="rail" aria-label="Contents">
+  <h2>Contents</h2>
+  <ol class="toc" id="toc"></ol>
+</nav>
+
+<main>
+<header class="hero">
+  <p class="eyebrow">Upload methods · Part 2 of 12 · Windows or Linux · USB DFU</p>
+  <h1>Firmware updates over USB DFU with MCUboot on the EK-RA8M2</h1>
+  <p class="lede">The running application receives the new image over the board's USB Full Speed port (J11) with the standard USB DFU protocol and writes it into MCUboot's secondary slot. After a reset MCUboot copies it over the primary slot and starts it. On the PC you only need <code>dfu-util</code>; no debugger is involved after the first install.</p>
+  <div class="meta">
+    <span class="chip ok">Verified on the board 2026-10-20</span>
+    <span class="chip">FSP 6.4.0</span>
+    <span class="chip">LLVM 21.1.1</span>
+    <span class="chip">MCUboot 2.1.0</span>
+    <span class="chip">ThreadX + USBX DFU</span>
+    <span class="chip">dfu-util 0.11</span>
+    <span class="chip">Run on Fedora 44</span>
+    <span class="chip todo">Windows steps not tested yet</span>
+    <span class="chip todo">e² studio GUI build not tried yet</span>
+  </div>
+  <div class="actions">
+    <a class="btn primary" href="https://claude.ai/artifact/Ufz8vLw3LGDswtSXg8czHB" target="_blank" rel="noopener">Part 1: upload with the debugger</a>
+    <a class="btn" href="https://claude.ai/artifact/1jR24HJzBZz65ySrt2TJ5c" target="_blank" rel="noopener">Firmware updates on the RA8M2, explained</a>
+  </div>
+  <details class="mtoc"><summary>Contents</summary><ol class="toc" id="toc2"></ol></details>
+
+  <div class="callout info">
+    <p><b>What "verified" covers.</b> Everything here was run on your EK-RA8M2 from a Linux PC: projects generated and built headlessly, bootloader and first app written with J-Link, then updates over USB DFU in both directions (slow blink v1.0.0 to fast blink v2.0.0 and back). Opening and building the workspace in the e² studio GUI has not been tried.</p>
+    <p><b>Windows.</b> Where a step differs between systems it has its own <b>Windows | Linux</b> tabs; picking one switches every such step on the page, and this browser remembers it. The Windows steps have not been run. They do the same things as the Linux scripts, with the Windows builds of the same tools (J-Link, <code>dfu-util</code>, Python) plus the WinUSB driver that Windows needs for a DFU device. Each Windows tab is flagged <span class="ost-note" style="margin:0">not tested</span>.</p>
+  </div>
+</header>
+
+<section id="s0">
+  <h2 class="sec"><span class="n">0</span>What you will end up with</h2>
+  <div class="mapwrap">
+    <figure>
+      <figcaption>MRAM, 1 MB from 0x0200_0000, to scale</figcaption>
+      <div class="mram">
+        <span class="addr">0x0200_0000</span><div class="blk boot" style="--h:1"><b>MCUboot</b><span>64 KB · 12 KB used</span></div>
+        <span class="addr">0x0201_0000</span><div class="blk hdr" style="--h:0.5">image header 0x200</div>
+        <span class="addr">0x0201_0200</span><div class="blk pri" style="--h:7"><b>Primary slot</b><span>the app that runs · 0x77E00</span></div>
+        <span class="addr">0x0208_8000</span><div class="blk hdr" style="--h:0.5">image header 0x200</div>
+        <span class="addr">0x0208_8200</span><div class="blk secd" style="--h:7"><b>Secondary slot</b><span>DFU writes the new image here · 0x77E00</span></div>
+        <span class="addr">0x0210_0000</span><div class="end"></div>
+      </div>
+      <p class="src">One image (CPU0 only). The two slots fill the rest of the 1 MB exactly.</p>
+    </figure>
+    <figure>
+      <figcaption>One update, start to finish</figcaption>
+      <ol class="flow">
+        <li><span><span class="who">PC</span><code>dfu-util -D app.bin.signed</code> sends the signed image in 256-byte blocks.</span></li>
+        <li><span><span class="who">Running app</span>Writes each block straight into the secondary slot. Green LED2 is on.</span></li>
+        <li><span><span class="who">Running app</span>Checks the MCUboot magic at the slot start, waits 1.5 s, resets the MCU.</span></li>
+        <li><span><span class="who">MCUboot</span>Sees a pending image, checks its SHA-256, copies it over the primary slot. Red LED3 is on.</span></li>
+        <li><span><span class="who">New app</span>Starts and enumerates again in DFU mode, ready for the next update.</span></li>
+      </ol>
+    </figure>
+  </div>
+</section>
+
+<section id="s1">
+  <h2 class="sec"><span class="n">1</span>How this differs from Part 1</h2>
+  <p>Both parts use the same MCUboot idea: a new image lands in the secondary slot and MCUboot installs it at the next reset. They differ in who puts it there.</p>
+  <div class="tw"><table>
+    <thead><tr><th></th><th>Part 1 · Debugger</th><th>Part 2 · USB DFU</th></tr></thead>
+    <tbody>
+      <tr><td>Who writes the secondary slot</td><td>e² studio over J-Link (<i>Load Ancillary File</i>)</td><td>The running application, over USB</td></tr>
+      <tr><td>Cable for updates</td><td>J10 (debug)</td><td>J11 (USB FS). J10 only for the first install.</td></tr>
+      <tr><td>PC tool</td><td>e² studio debug session</td><td><code>dfu-util</code></td></tr>
+      <tr><td>Cores</td><td>CPU0 and CPU1, two images</td><td>CPU0 only, one image</td></tr>
+      <tr><td>Image check</td><td>ECDSA P-256 signature, test keys</td><td>SHA-256 hash only, no signature</td></tr>
+      <tr><td>Crypto in the bootloader</td><td>MbedTLS or PSA Crypto</td><td>TinyCrypt (software)</td></tr>
+      <tr><td>Application</td><td>Bare metal Blinky</td><td>ThreadX with a DFU thread and a Blinky thread</td></tr>
+      <tr><td>Downgrade prevention</td><td>On (new version must be higher)</td><td>Off, so v1.0.0 and v2.0.0 can replace each other</td></tr>
+      <tr><td>Source</td><td>R11AN1099 (EK-RA8P1), adapted</td><td>Renesas' EK-RA8M2 <code>USBX_dfu</code> example, plus MCUboot</td></tr>
+      <tr><td>Status</td><td>Written from the documents</td><td>Run on the board</td></tr>
+    </tbody>
+  </table></div>
+  <p>Part 1's §7.9 suggested porting the USB CDC + XMODEM downloader from R11AN1088 (RA2L2). This part takes a different and simpler route: the EK-RA8M2 example bundle already contains <code>ek_ra8m2/USBX_dfu/USBX_dfu_ek_ra8m2_ep</code>, which configures USB, clocks and pins for this board. DFU is a standard USB class, so the PC side needs no terminal program.</p>
+</section>
+
+<section id="s2">
+  <h2 class="sec"><span class="n">2</span>Board setup and LEDs</h2>
+  <ol class="steps">
+    <li>Jumpers in the default positions (Part 1, §4). <b>J16 on pins 2-3</b> for normal boot.</li>
+    <li>Two USB cables to the PC, both data cables: <b>J10</b> (DEBUG1, power and J-Link) and <b>J11</b> (USB Full Speed, the DFU port).</li>
+    <li>The app drives <b>P500 low</b> at start-up. On the EK-RA8M2 this routes J11 as a USB <i>device</i> port (user's manual 5.4.1).</li>
+  </ol>
+  <h4>What the LEDs tell you</h4>
+  <div class="tw"><table>
+    <thead><tr><th>LED</th><th>State</th><th>Meaning</th></tr></thead>
+    <tbody>
+      <tr><td><span class="led blue"></span>LED1 blue</td><td>blinks at 1 Hz</td><td>Slow app (v1.0.0) is running</td></tr>
+      <tr><td><span class="led blue"></span>LED1 blue</td><td>blinks at 5 Hz</td><td>Fast app (v2.0.0) is running</td></tr>
+      <tr><td><span class="led green"></span>LED2 green</td><td>on</td><td>A DFU download is in progress</td></tr>
+      <tr><td><span class="led red"></span>LED3 red</td><td>on briefly after reset</td><td>MCUboot is checking the slots. Stays on longer while it copies an update.</td></tr>
+      <tr class="hl"><td><span class="led red"></span>LED3 red</td><td>fast blink</td><td>MCUboot found no valid image. Reflash over J-Link (§7).</td></tr>
+      <tr class="hl"><td><span class="led red"></span>LED3 red</td><td>steady, LED1 not blinking</td><td>The app stopped on a setup error (MRAM, USBX or USB driver failed to open)</td></tr>
+    </tbody>
+  </table></div>
+  <div class="callout stop">
+    <p><b>Check the TrustZone boundary once.</b> The projects are flat (no TrustZone), so the bootloader and both slots must sit in the Secure area. A board that was last programmed with a TrustZone project keeps that project's boundary. On your board an earlier, hand-flashed TrustZone firmware had left only the first 96 KB of MRAM secure. MCUboot and J-Link then could not reach anything above 0x0201_8000.</p>
+    <p>To read or reset it: put J16 on pins 1-2, connect J11, press RESET, then run the script (needs <code>pyserial</code>, §3). Put J16 back on 2-3 and press RESET. This uses the ROM boot firmware commands from R01AN8050 (6.13, 6.14). Your board is already set to all secure, so you do not need to do this again.</p>
+<div class="ost"><div class="ost-bar" role="tablist" aria-label="Your PC"><button type="button" role="tab" data-host="win">Windows</button><button type="button" role="tab" data-host="linux">Linux</button><span class="ost-note os-win">not tested</span></div>
+<div class="ost-pane os-win" role="tabpanel">
+<pre>py scripts\ra8m2_boundary.py                 <span class="c">REM read</span>
+py scripts\ra8m2_boundary.py --all-secure    <span class="c">REM all 1024 KB secure</span></pre>
+<p>The boot firmware's USB port (045B:0261) is a standard USB serial device, so Windows loads its own driver for it. The script finds the COM port by that ID.</p>
+</div>
+<div class="ost-pane os-linux" role="tabpanel">
+<pre>scripts/ra8m2_boundary.py                 <span class="c"># read</span>
+scripts/ra8m2_boundary.py --all-secure    <span class="c"># all 1024 KB secure</span></pre>
+</div></div>
+  </div>
+</section>
+
+<section id="s3">
+  <h2 class="sec"><span class="n">3</span>PC software</h2>
+  <div class="ost"><div class="ost-bar" role="tablist" aria-label="Your PC"><button type="button" role="tab" data-host="win">Windows</button><button type="button" role="tab" data-host="linux">Linux</button><span class="ost-note os-win">not tested</span></div>
+<div class="ost-pane os-win" role="tabpanel">
+<div class="tw"><table>
+    <thead><tr><th>Item</th><th>Why</th><th>How</th></tr></thead>
+    <tbody>
+      <tr><td>FSP 6.4.0 + e² studio 2025-12</td><td>Code generation, LLVM toolchain, and the SEGGER J-Link software (the Windows installer bundles it)</td><td>As in Part 1, §5: <code>setup_fsp_v6_4_0_e2s_v2025-12.exe</code>, Quick Install</td></tr>
+      <tr><td>Python 3.12 or newer</td><td>Signs the images in the post-build step, runs <code>ra8m2_boundary.py</code></td><td><a href="https://www.python.org/downloads/" target="_blank" rel="noopener">python.org</a>, tick "Add python.exe to PATH"</td></tr>
+      <tr><td>imgtool's Python packages</td><td>The post-build step that makes <code>*.bin.signed</code></td><td><code>py -m pip install --user -r ra8m2_mcuboot\ra\mcu-tools\MCUboot\scripts\requirements.txt</code> (includes <code>cbor2</code> and <code>dilithium-py</code>)</td></tr>
+      <tr><td><code>pyserial</code></td><td>Only for <code>ra8m2_boundary.py</code></td><td><code>py -m pip install --user pyserial</code></td></tr>
+      <tr><td><code>dfu-util</code> 0.11</td><td>Sends the update</td><td><code>dfu-util-0.11-binaries.tar.xz</code> from <a href="https://dfu-util.sourceforge.net/releases/" target="_blank" rel="noopener">dfu-util.sourceforge.net/releases</a>. Unpack it (7-Zip), keep the <code>win64</code> folder (<code>dfu-util.exe</code> with its <code>libusb-1.0.dll</code>) and add that folder to PATH</td></tr>
+      <tr><td>WinUSB driver for 1209:0001</td><td><code>dfu-util</code> talks to the board through libusb, and Windows has no driver for a DFU device of its own</td><td><a href="https://zadig.akeo.ie/" target="_blank" rel="noopener">Zadig</a>, see below</td></tr>
+    </tbody>
+  </table></div>
+  <h4>WinUSB for the DFU device, once</h4>
+  <ol class="steps">
+    <li>Do the first install over J-Link (§7), so the app runs and J11 shows the DFU device. Until it has a driver, Device Manager lists it under <i>Other devices</i> as <b>MCUboot DFU app (SLOW)</b> with a warning sign.</li>
+    <li>Start Zadig and tick <span class="menu">Options › List All Devices</span>.</li>
+    <li>Pick <b>MCUboot DFU app (SLOW)</b> and check that USB ID shows <code>1209 0001</code>. Do not pick the J-Link. Target driver <b>WinUSB</b>, click <b>Install Driver</b>.</li>
+    <li>Check in a Command Prompt: <code>dfu-util -l</code> lists <code>[1209:0001]</code>. The fast app uses the same VID:PID, so the driver should carry over to it; if Windows shows the device under <i>Other devices</i> again after an update, repeat step 3.</li>
+  </ol>
+</div>
+<div class="ost-pane os-linux" role="tabpanel">
+<div class="tw"><table>
+    <thead><tr><th>Item</th><th>Why</th><th>How</th></tr></thead>
+    <tbody>
+      <tr><td>FSP 6.4.0 + e² studio 2025-12</td><td>Code generation, LLVM toolchain, <code>e2studio-cli</code></td><td>As in Part 1, §5</td></tr>
+      <tr><td>SEGGER J-Link (V9.86 here)</td><td>First install of bootloader and app</td><td>As in Part 1, §5</td></tr>
+      <tr><td><code>dfu-util</code> (0.11 here)</td><td>Sends the update</td><td><code>sudo dnf install dfu-util</code> (Ubuntu: <code>sudo apt install dfu-util</code>)</td></tr>
+      <tr><td>udev rule for 1209:0001</td><td>Lets your normal user open the DFU device</td><td>See below</td></tr>
+      <tr><td>imgtool's Python packages</td><td>The post-build step that makes <code>*.bin.signed</code></td><td><code>python3 -m pip install --user -r ra8m2_mcuboot/ra/mcu-tools/MCUboot/scripts/requirements.txt</code> (includes <code>cbor2</code> and <code>dilithium-py</code>)</td></tr>
+      <tr><td><code>pyserial</code></td><td>Only for <code>ra8m2_boundary.py</code></td><td><code>python3 -m pip install --user pyserial</code></td></tr>
+    </tbody>
+  </table></div>
+  <pre><span class="c"># udev rule, once</span>
+sudo cp scripts/50-ek-ra8m2-dfu.rules /etc/udev/rules.d/
+sudo udevadm control --reload
+<span class="c"># the rule itself:</span>
+SUBSYSTEM=="usb", ATTR{idVendor}=="1209", ATTR{idProduct}=="0001", TAG+="uaccess"</pre>
+</div></div>
+</section>
+
+<section id="s4">
+  <h2 class="sec"><span class="n">4</span>The workspace</h2>
+  <p class="src">/home/vasil/usr/prj/ra8-bl/e2ws on the Linux PC</p>
+  <div class="tw"><table>
+    <thead><tr><th>Project</th><th>What it holds</th></tr></thead>
+    <tbody>
+      <tr><td class="m">ra8m2_solution</td><td>The memory map (Memory Partitions) and the clock tree. FSP 6.x keeps MCUboot's slot sizes here, not in the MCUboot module.</td></tr>
+      <tr><td class="m">ra8m2_mcuboot</td><td>The bootloader: MCUboot + MCUboot Port for RA + TinyCrypt + MRAM driver. <code>src/hal_entry.c</code> drives LED3 and calls <code>boot_go()</code>.</td></tr>
+      <tr><td class="m">ra8m2_app_slow</td><td>Test app v1.0.0: DFU thread + Blinky at 1 Hz</td></tr>
+      <tr><td class="m">ra8m2_app_fast</td><td>Test app v2.0.0: identical except <code>src/app_variant.h</code> (5 Hz, bcdDevice 2.00, name "FAST")</td></tr>
+    </tbody>
+  </table></div>
+  <p>The four projects were generated by <code>scripts/generator/gen.py</code> from the pristine <code>USBX_dfu_ek_ra8m2_ep</code> example. Board, BSP, clock and pin settings are copied from it, so they match what the e² studio wizard makes for this board. The hand-written sources live in <code>scripts/generator/src/</code>. FSP's own code (<code>ra/</code>, <code>ra_gen/</code>, <code>ra_cfg/</code>) is not written by the script; the first build generates it from each <code>configuration.xml</code>.</p>
+
+  <h4>Get the workspace onto your PC</h4>
+  <div class="ost"><div class="ost-bar" role="tablist" aria-label="Your PC"><button type="button" role="tab" data-host="win">Windows</button><button type="button" role="tab" data-host="linux">Linux</button><span class="ost-note os-win">not tested</span></div>
+<div class="ost-pane os-win" role="tabpanel">
+<ol class="steps">
+    <li>Copy the <code>e2ws</code> folder to a short path without spaces, for example <code>C:\e2ws</code>. Leave out <code>.metadata</code> (e² studio's own workspace state, full of Linux paths) and every project's <code>Debug</code> folder (makefiles with Linux tool paths). The build makes both again.</li>
+    <li>In e² studio: <span class="menu">File › Switch Workspace</span> to <code>C:\e2ws</code>, then <span class="menu">File › Import › General › Existing Projects into Workspace</span>, root directory <code>C:\e2ws</code>, import all four projects.</li>
+    <li>Change the two settings that hold a Linux value:
+      <ul class="plain">
+        <li><code>ra8m2_mcuboot</code>: open <code>configuration.xml</code>, MCUboot stack › <b>Signing › Python</b>: <code>python3</code> → <code>python</code>. Save, <b>Generate Project Content</b>. The python.org installer makes no <code>python3.exe</code>, and on Windows <code>python3</code> starts the Microsoft Store stub.</li>
+        <li><code>ra8m2_app_slow</code> and <code>ra8m2_app_fast</code>: <span class="menu">Properties › C/C++ Build › Environment</span>, <code>MCUBOOT_APP_BIN_CONVERTER</code> = <code>${TCINSTALL}bin\llvm-objcopy.exe</code>.</li>
+      </ul>
+      <p>The Python command matters because the bootloader build writes it into its SmartBundle (<code>ra8m2_mcuboot.sbd</code>), and each app's post-build step runs it to sign the image. So build the bootloader again before the apps (§6).</p></li>
+  </ol>
+</div>
+<div class="ost-pane os-linux" role="tabpanel">
+<p>Nothing to do: the workspace was made on this PC. Do not mix Windows and Linux builds in one copy of it: the signing command and the toolchain paths differ.</p>
+</div></div>
+
+  <h4>Memory partitions (ra8m2_solution)</h4>
+  <div class="tw"><table>
+    <thead><tr><th>Name</th><th>Offset</th><th>Size</th><th>Role</th></tr></thead>
+    <tbody>
+      <tr><td class="m">FLASH_CPU0_B</td><td class="m">0x00000</td><td class="m">0x10000</td><td>bootloader, 64 KB</td></tr>
+      <tr><td class="m">__BL_0_P_H</td><td class="m">0x10000</td><td class="m">0x200</td><td>primary image header</td></tr>
+      <tr><td class="m">FLASH_CPU0_S</td><td class="m">0x10200</td><td class="m">0x77E00</td><td>primary slot, the app links here</td></tr>
+      <tr><td class="m">__BL_0_S_H</td><td class="m">0x88000</td><td class="m">0x200</td><td>secondary image header</td></tr>
+      <tr><td class="m">__BL_0_S_I</td><td class="m">0x88200</td><td class="m">0x77E00</td><td>secondary slot</td></tr>
+      <tr><td class="m">RAM_CPU0_B</td><td class="m">0x00000</td><td class="m">0x10000</td><td>bootloader RAM, 64 KB</td></tr>
+      <tr><td class="m">RAM_CPU0_S</td><td class="m">0x10000</td><td class="m">0x1C4000</td><td>app RAM, the rest</td></tr>
+    </tbody>
+  </table></div>
+  <p>Flash offsets are from 0x0200_0000. All partitions are Secure. The app finds the secondary slot through <code>BSP_PARTITION___BL_0_S_H_START</code> in the generated <code>bsp_linker_info.h</code>, so the address is not typed into the code.</p>
+
+  <h4>MCUboot settings (ra8m2_mcuboot)</h4>
+  <div class="tw"><table>
+    <thead><tr><th>Property</th><th>Value</th></tr></thead>
+    <tbody>
+      <tr><td>Upgrade mode</td><td>Overwrite Only</td></tr>
+      <tr><td>Signature type</td><td>None (the image still carries a SHA-256 TLV that MCUboot checks)</td></tr>
+      <tr><td>Encryption</td><td>None</td></tr>
+      <tr><td>Validate primary image</td><td>Enabled</td></tr>
+      <tr><td>Downgrade prevention</td><td>Disabled</td></tr>
+      <tr><td>Custom signing options</td><td><code>--confirm</code> (image 1 and image 2)</td></tr>
+      <tr><td>Signing › Python</td><td><code>python3</code> <span class="ostag">Linux</span> · <code>python</code> <span class="ostag">Windows</span></td></tr>
+      <tr><td>Crypto stack</td><td>MCUboot TinyCrypt</td></tr>
+      <tr><td>Flash driver</td><td><code>r_mram</code></td></tr>
+      <tr><td>Logging</td><td>Off</td></tr>
+      <tr><td>BSP main stack / heap</td><td>0x1000 / 0x400</td></tr>
+    </tbody>
+  </table></div>
+
+  <h4>Application stacks (ra8m2_app_slow, ra8m2_app_fast)</h4>
+  <div class="tw"><table>
+    <thead><tr><th>Item</th><th>Setting</th></tr></thead>
+    <tbody>
+      <tr><td>RTOS</td><td>ThreadX (FSP 6.4.0 pack)</td></tr>
+      <tr><td>DFU Thread</td><td>stack 2048, priority 10. Stack: <i>USBX DFU</i> › <i>USBX Port</i> › <i>USB Basic</i> (<code>g_basic0</code>): peripheral mode, Full Speed, module 0, IRQ priority 12</td></tr>
+      <tr><td>Blinky Thread</td><td>stack 1024, priority 16</td></tr>
+      <tr><td>MRAM driver</td><td><code>g_mram0</code>, no callback, used to write the secondary slot</td></tr>
+      <tr><td>Clocks</td><td>The EK-RA8M2 defaults from the example. USB needs 48 MHz (PLL2R / 10).</td></tr>
+      <tr><td>BSP main stack / heap</td><td>0x1000 / 0x1000</td></tr>
+      <tr><td>Build variable</td><td><code>SmartBundle</code> = <code>${workspace_loc:/ra8m2_mcuboot}/${ConfigName}/ra8m2_mcuboot.sbd</code></td></tr>
+      <tr><td>Environment</td><td><code>MCUBOOT_IMAGE_VERSION</code> = 1.0.0 or 2.0.0, <code>MCUBOOT_APP_BIN_CONVERTER</code> = <code>${TCINSTALL}bin/llvm-objcopy</code> <span class="ostag">Linux</span> · <code>${TCINSTALL}bin\llvm-objcopy.exe</code> <span class="ostag">Windows</span></td></tr>
+    </tbody>
+  </table></div>
+  <div class="callout">
+    <p><b>Clocks are not inherited.</b> The SmartBundle tells the app where its slot is, but it does not carry the clock tree over from the bootloader. Each app has its own copy of the EK-RA8M2 clock settings, or USB gets no 48 MHz clock and never enumerates.</p>
+  </div>
+</section>
+
+<section id="s5">
+  <h2 class="sec"><span class="n">5</span>The DFU application, step by step</h2>
+  <p class="src">ra8m2_app_*/src/dfu_thread_entry.c, dfu_descriptors.c</p>
+
+  <h4>Descriptors: always in DFU mode</h4>
+  <p>The device only ever shows one interface: class 0xFE, subclass 0x01 (DFU), protocol 0x02 (DFU mode), named "MCUboot secondary slot". There is no runtime mode and no detach step, so <code>dfu-util -a 0 -D file</code> starts writing right away.</p>
+  <div class="tw"><table>
+    <thead><tr><th>Field</th><th>Value</th><th>Note</th></tr></thead>
+    <tbody>
+      <tr><td>VID:PID</td><td class="m">1209:0001</td><td>pid.codes test ID, for development only</td></tr>
+      <tr><td>bcdDevice</td><td class="m">0x0100 / 0x0200</td><td>Shows which app runs: <code>dfu-util -l</code> prints <code>ver=0100</code> or <code>ver=0200</code></td></tr>
+      <tr><td>bmAttributes</td><td class="m">0x01</td><td><i>bitCanDnload</i> only. <b>No bitWillDetach</b>, see below.</td></tr>
+      <tr><td>wTransferSize</td><td class="m">256</td><td>USBX's control transfer limit (<code>UX_SLAVE_REQUEST_CONTROL_MAX_LENGTH</code>)</td></tr>
+      <tr><td>bcdDFUVersion</td><td class="m">1.1</td><td></td></tr>
+    </tbody>
+  </table></div>
+
+  <h4>Writing a block</h4>
+  <p>USBX calls the write callback once per 256-byte block. MRAM is written in place and needs no erase step, so each block goes straight to its address in the secondary slot:</p>
+  <pre>uint32_t offset = block_number * DFU_TRANSFER_SIZE;
+if (offset + length &gt; DFU_SLOT_SIZE) { g_download_error = true; return UX_ERROR; }
+
+FSP_CRITICAL_SECTION_ENTER;   <span class="c">/* interrupts off while MRAM is in program mode */</span>
+err = R_MRAM_Write(&amp;g_mram0_ctrl, (uint32_t) data_pointer, DFU_SLOT_START + offset, length);
+FSP_CRITICAL_SECTION_EXIT;</pre>
+  <p>USBX's DFU class has no handlers for the dfuDNBUSY and dfuMANIFEST states, so the write has to finish inside the callback. MRAM is fast enough for that at 256 bytes per block.</p>
+
+  <h4>Finishing the download</h4>
+  <ol class="steps">
+    <li>After the last (empty) DNLOAD request, USBX sends <code>END_DOWNLOAD</code>. The app notes that the download is done.</li>
+    <li>At the next GETSTATUS it checks the first word of the slot for the MCUboot image magic <code>0x96F3B83D</code>. If it is missing, the device reports an error and stays on the current firmware.</li>
+    <li>If it is there, the main loop waits <b>1.5 s</b>, turns LED2 off and calls <code>NVIC_SystemReset()</code>.</li>
+  </ol>
+  <div class="callout stop">
+    <p><b>Why no bitWillDetach, and why the delay.</b> The first version set bitWillDetach and rebooted about 2 ms after the final status. At that moment dfu-util was issuing its own USB reset to the device. The device vanished in the middle of it, and the PC's xHCI controller (<code>0000:02:00.0</code>) hung: dfu-util stuck in state D, the controller could not be unbound, only a PC reboot helped. Without bitWillDetach, dfu-util resets the device while it is still on the bus, and the app reboots only after that. With this fix both directions ran cleanly.</p>
+  </div>
+
+  <h4>The two variants</h4>
+  <pre><span class="c">/* src/app_variant.h, ra8m2_app_slow */</span>
+#define APP_VARIANT_NAME          "SLOW"
+#define APP_BLINK_HALF_PERIOD_MS  (500U)   <span class="c">/* LED1 1 Hz */</span>
+#define APP_VARIANT_BCD_MAJOR     (0x01)   <span class="c">/* ver=0100 */</span>
+
+<span class="c">/* ra8m2_app_fast: "FAST", 100U (5 Hz), 0x02 (ver=0200) */</span></pre>
+  <div class="callout">
+    <p><b>FSP 6.4 gotcha:</b> <code>board_leds.h</code> does not declare <code>g_bsp_leds</code>, although <code>board_leds.c</code> defines it. Each file that uses it declares <code>extern const bsp_leds_t g_bsp_leds;</code> itself.</p>
+  </div>
+</section>
+
+<section id="s6">
+  <h2 class="sec"><span class="n">6</span>Build</h2>
+  <h4>Headless or GUI</h4>
+  <div class="ost"><div class="ost-bar" role="tablist" aria-label="Your PC"><button type="button" role="tab" data-host="win">Windows</button><button type="button" role="tab" data-host="linux">Linux</button><span class="ost-note os-win">not tested</span></div>
+<div class="ost-pane os-win" role="tabpanel">
+<p>Use the e² studio GUI below. <code>build_all.sh</code> is a bash script with Linux paths and has no Windows version. After changing <b>Signing › Python</b> (§4), build <code>ra8m2_mcuboot</code> first, then the apps; building <code>ra8m2_solution</code> does that order for you.</p>
+<p>The outputs are the same as on Linux, under each project's <code>Debug</code> folder: <code>ra8m2_mcuboot.hex</code> and <code>ra8m2_app_*.bin.signed</code> (491,520 bytes).</p>
+</div>
+<div class="ost-pane os-linux" role="tabpanel">
+<pre>scripts/headless/build_all.sh</pre>
+  <p>It writes the solution's SmartBundle (<code>ra8m2_solution/build/ra8m2_solution.sbd</code>) with <code>make_solution_sbd.py</code>, then builds <code>ra8m2_mcuboot</code>, <code>ra8m2_app_slow</code> and <code>ra8m2_app_fast</code> with <code>e2studio-cli</code>, in that order. The order matters: the bootloader reads the solution's bundle and the apps read the bootloader's. Result on 2026-10-20: 0 warnings.</p>
+  <div class="tw"><table>
+    <thead><tr><th>Output</th><th>Size</th></tr></thead>
+    <tbody>
+      <tr><td class="m">ra8m2_mcuboot/Debug/ra8m2_mcuboot.hex</td><td>12 KB code of the 64 KB area</td></tr>
+      <tr><td class="m">ra8m2_app_*/Debug/ra8m2_app_*.elf</td><td>44 KB code, 53 KB RAM (USBX pool 36 KB)</td></tr>
+      <tr><td class="m">ra8m2_app_*/Debug/ra8m2_app_*.bin.signed</td><td>491,520 bytes = the full slot (header + image + padding + trailer)</td></tr>
+    </tbody>
+  </table></div>
+  <p>Check an image with imgtool if you want: <code>imgtool verify ra8m2_app_fast/Debug/ra8m2_app_fast.bin.signed</code> reports the version and a valid hash.</p>
+  <div class="callout">
+    <p><b>Two headless limits.</b> <code>e2studio-cli project create</code> cannot make LLVM projects (its <code>Renesas_FSP_AC</code> option means Arm Compiler 6), so the projects come from the generator instead. The solution builder needs the GUI workbench, so the script writes the <code>.sbd</code> itself.</p>
+  </div>
+</div></div>
+  <h4>In the e² studio GUI (not tried yet)</h4>
+  <ol class="steps">
+    <li><span class="menu">File › Switch Workspace</span> to the <code>e2ws</code> folder.</li>
+    <li>Right-click <code>ra8m2_solution</code> › <b>Build Project</b>. This regenerates the <code>.sbd</code> the official way and builds the chain.</li>
+    <li>Check that nothing in the partitions or the generated files changes. If it does, note what changed: that is the next thing to fix in this guide.</li>
+  </ol>
+</section>
+
+<section id="s7">
+  <h2 class="sec"><span class="n">7</span>First install over J-Link</h2>
+  <p>A blank board has no DFU app, so the bootloader and the first app go on with the debugger, once. Use J-Link for this, not DFU, and use it again whenever LED3 blinks fast.</p>
+  <div class="ost"><div class="ost-bar" role="tablist" aria-label="Your PC"><button type="button" role="tab" data-host="win">Windows</button><button type="button" role="tab" data-host="linux">Linux</button><span class="ost-note os-win">not tested</span></div>
+<div class="ost-pane os-win" role="tabpanel">
+<pre>cd C:\e2ws
+powershell -ExecutionPolicy Bypass -File scripts\flash_jlink.ps1       <span class="c">REM bootloader + slow app</span>
+powershell -ExecutionPolicy Bypass -File scripts\flash_jlink.ps1 fast    <span class="c">REM bootloader + fast app</span></pre>
+<p><code>scripts\flash_jlink.ps1</code> sends the same J-Link commands as the Linux script to <code>JLink.exe</code>. It takes <code>JLink.exe</code> from PATH, else the newest <code>C:\Program Files\SEGGER\JLink*</code> folder; set <code>JLINK</code> to the full path of <code>JLink.exe</code> to choose one. The FSP installer brings its own J-Link version. The reset problem below was seen with V9.86; the script avoids that reset with any version.</p>
+<p>Expected: <code>Verify successful.</code>, then the board resets on its own, LED3 flashes and LED1 starts blinking. Device Manager shows <b>MCUboot DFU app (SLOW)</b>, under <i>Other devices</i> until you install WinUSB (§3).</p>
+</div>
+<div class="ost-pane os-linux" role="tabpanel">
+<pre>scripts/flash_jlink.sh          <span class="c"># bootloader + slow app</span>
+scripts/flash_jlink.sh fast     <span class="c"># bootloader + fast app</span></pre>
+  <p>Expected: <code>Verify successful.</code>, then the board resets on its own, LED3 flashes and LED1 starts blinking. <code>lsusb</code> shows <code>1209:0001</code> next to the J-Link (<code>1366:1024</code>).</p>
+</div></div>
+  <h4>What the script does, and why</h4>
+  <ul class="plain">
+    <li><b>Halts without a reset.</b> J-Link V9.86's built-in RA8 reset fails on this board ("SYSRESETREQ has confused core", then "Failed to select AP0x00000001", and the debug port stays offline until a power cycle). <code>scripts/ra8m2_halt_only_reset.JLinkScript</code> replaces only <code>ResetTarget()</code> with a plain halt.</li>
+    <li><b>Quiets the CPU</b> (SysTick off, all NVIC interrupts disabled and cleared, PRIMASK set) so the old firmware cannot jump into MRAM while it is rewritten.</li>
+    <li><b>Writes 0xFF over all of MRAM first.</b> MRAM that was never written reads back as an ECC error, which is a bus fault. MCUboot reads the secondary slot header at every boot, so that slot must hold real data (0xFF = empty) before the first boot. J-Link's <code>erase</code> on MRAM writes nothing, so the script programs the area instead.</li>
+    <li><b>Loads</b> <code>ra8m2_mcuboot.hex</code> and the signed app at 0x0201_0000, then runs <code>verifybin</code>. <code>loadbin</code> only accepts a <code>.bin</code> extension, so the script copies <code>.bin.signed</code> to a temporary <code>.bin</code>.</li>
+    <li><b>Resets through AIRCR</b> (SYSRESETREQ) after clearing DEMCR, so the MCU starts MCUboot without the debugger holding it.</li>
+  </ul>
+</section>
+
+<section id="s8">
+  <h2 class="sec"><span class="n">8</span>Do an update over USB</h2>
+  <ol class="steps">
+    <li>See which app is running:
+<div class="ost"><div class="ost-bar" role="tablist" aria-label="Your PC"><button type="button" role="tab" data-host="win">Windows</button><button type="button" role="tab" data-host="linux">Linux</button><span class="ost-note os-win">not tested</span></div>
+<div class="ost-pane os-win" role="tabpanel">
+<pre>dfu-util -l | findstr 1209</pre>
+</div>
+<div class="ost-pane os-linux" role="tabpanel">
+<pre>dfu-util -l | grep 1209</pre>
+</div></div>
+<pre class="out">Found DFU: [1209:0001] ver=0100, devnum=7, cfg=1, intf=0, path="1-4", alt=0, name="MCUboot secondary slot", serial="0001"</pre></li>
+    <li>Send the other app.
+<div class="ost"><div class="ost-bar" role="tablist" aria-label="Your PC"><button type="button" role="tab" data-host="win">Windows</button><button type="button" role="tab" data-host="linux">Linux</button><span class="ost-note os-win">not tested</span></div>
+<div class="ost-pane os-win" role="tabpanel">
+<pre>powershell -ExecutionPolicy Bypass -File scripts\dfu_update.ps1 fast
+<span class="c">REM the script runs: dfu-util -d 1209:0001 -a 0 -D ra8m2_app_fast\Debug\ra8m2_app_fast.bin.signed</span></pre>
+<p>Set <code>DFU_UTIL</code> to the full path of <code>dfu-util.exe</code> if it is not on PATH.</p>
+</div>
+<div class="ost-pane os-linux" role="tabpanel">
+<p>Write the output to a file: piping it through <code>tail</code> once hid all of it.</p>
+<pre>scripts/dfu_update.sh fast &gt; /tmp/dfu.log 2&gt;&amp;1; cat /tmp/dfu.log
+<span class="c"># the script runs: dfu-util -d 1209:0001 -a 0 -D ra8m2_app_fast/Debug/ra8m2_app_fast.bin.signed</span></pre>
+</div></div>
+<p>Expected output (from the Linux run):</p>
+<pre class="out">dfu-util: Warning: Invalid DFU suffix signature
+Device returned transfer size 256
+Copying data from PC to DFU device
+Download	[=========================] 100%       491520 bytes
+Download done.
+DFU state(8) = dfuMANIFEST-WAIT-RESET, status(0) = No error condition is present
+Resetting USB to switch back to runtime mode
+Done!</pre>
+      <p>The download takes about <b>22 s</b> (the whole padded slot, 1920 blocks). The suffix warning is harmless: FSP's signed image has no DFU suffix.</p></li>
+    <li>Watch the board: <span class="led green"></span>green on during the download, off about 1.5 s after "Done!". <span class="led red"></span>Red on while MCUboot copies. Then <span class="led blue"></span>blue blinks at the new rate.</li>
+    <li>Check the new version: <code>dfu-util -l</code> now shows <code>ver=0200</code>.
+<div class="ost"><div class="ost-bar" role="tablist" aria-label="Your PC"><button type="button" role="tab" data-host="win">Windows</button><button type="button" role="tab" data-host="linux">Linux</button><span class="ost-note os-win">not tested</span></div>
+<div class="ost-pane os-win" role="tabpanel">
+<p>In Device Manager the device disappears about 1.5 s after "Done!" and comes back when the new app starts.</p>
+</div>
+<div class="ost-pane os-linux" role="tabpanel">
+<p>The kernel log (<code>sudo dmesg</code>) shows the clean sequence:</p>
+<pre class="out">usb 1-4: reset full-speed USB device number 8 using xhci_hcd
+usb 1-4: USB disconnect, device number 8
+usb 1-4: new full-speed USB device number 9 using xhci_hcd
+usb 1-4: New USB device found, idVendor=1209, idProduct=0001, bcdDevice= 1.00
+usb 1-4: Product: MCUboot DFU app (SLOW)</pre>
+      <p>(This excerpt is from the update back to slow.) The <i>reset</i> line is dfu-util's own reset; the disconnect follows about 2 s later, when the app reboots.</p>
+</div></div></li>
+    <li>Go back: send <code>slow</code> the same way, expect <code>ver=0100</code> and 1 Hz.</li>
+  </ol>
+  <h4>What happens if the download stops halfway</h4>
+  <p>The signed image is padded to the full slot size (<code>--confirm</code>), so the MCUboot trailer that marks "upgrade pending" sits in the last block. A download that is cut off never writes it. At the next reset MCUboot finds no pending upgrade and keeps running the current firmware, which still has DFU, so you simply send the image again. A power cut during MCUboot's own copy has not been tested. The secondary slot still marks the upgrade as pending until the copy is finished, so MCUboot should start the copy again at the next boot. If it cannot, Validate Primary Image refuses the half-written slot, LED3 blinks fast, and you reflash over J-Link.</p>
+</section>
+
+<section id="s9">
+  <h2 class="sec"><span class="n">9</span>Troubleshooting</h2>
+  <div class="tw"><table>
+    <thead><tr><th>Symptom</th><th>Cause / what to do</th></tr></thead>
+    <tbody>
+      <tr><td><span class="ostag">Linux</span> After an update, dfu-util hangs and cannot be killed, USB stops working on that controller</td><td>The device dropped off the bus during dfu-util's final USB reset (bitWillDetach plus an immediate reboot). Only a PC reboot clears it. The current apps are fixed; if an old app is still on the board, replace it over J-Link, not DFU.</td></tr>
+      <tr><td>J-Link: "SYSRESETREQ has confused core", then the debug port is gone</td><td>J-Link V9.86's RA8 reset. Power-cycle the board and use <code>scripts/flash_jlink.sh</code> (Windows: <code>flash_jlink.ps1</code>), which avoids that reset.</td></tr>
+      <tr><td>MCUboot or J-Link cannot read MRAM above 0x0201_8000</td><td>TrustZone boundary left by an earlier TrustZone firmware. <code>scripts/ra8m2_boundary.py --all-secure</code> (§2).</td></tr>
+      <tr><td>Hard fault in MCUboot on the very first boot</td><td>Secondary slot never written: unwritten MRAM gives an ECC bus fault. Write 0xFF over it (the flash script does).</td></tr>
+      <tr><td>LED3 blinks fast after reset</td><td>No valid image in the primary slot. Reflash over J-Link.</td></tr>
+      <tr><td>LED3 steady, LED1 does not blink</td><td>App setup error: MRAM, USBX or USB driver did not open. Check the build and clocks.</td></tr>
+      <tr><td>No 1209:0001 device after the app starts</td><td>Cable on J10 only (J11 needs its own data cable), a charge-only cable, or the app has no 48 MHz USB clock.</td></tr>
+      <tr><td><span class="ostag">Linux</span> <code>dfu-util: Cannot open DFU device</code> / permission errors</td><td>udev rule missing or not reloaded (§3). Unplug and replug J11 after installing it.</td></tr>
+      <tr><td><span class="ostag">Windows</span> <code>dfu-util -l</code> lists nothing, or <code>Cannot open DFU device</code> / <code>LIBUSB_ERROR_NOT_SUPPORTED</code></td><td>No WinUSB driver on 1209:0001. Install it with Zadig (§3). Check Device Manager: the device must not sit under <i>Other devices</i>.</td></tr>
+      <tr><td><span class="ostag">Windows</span> The post-build step opens the Microsoft Store, or says <code>python3</code> was not found</td><td><b>Signing › Python</b> is still <code>python3</code>. Set it to <code>python</code>, Generate Project Content, then build the bootloader before the apps (§4).</td></tr>
+      <tr><td><span class="ostag">Windows</span> The post-build step cannot find <code>llvm-objcopy</code></td><td><code>MCUBOOT_APP_BIN_CONVERTER</code> still has the Linux value. Use <code>${TCINSTALL}bin\llvm-objcopy.exe</code> (§4).</td></tr>
+      <tr><td><span class="ostag">Windows</span> PowerShell: "running scripts is disabled on this system"</td><td>Start the script with <code>powershell -ExecutionPolicy Bypass -File scripts\….ps1</code>, as shown in §7 and §8.</td></tr>
+      <tr><td>Download completes, but the old app keeps running</td><td>The file was not a signed MCUboot image (the magic check fails and dfu-util reports an error status), or it was built without <code>--confirm</code> so no pending trailer was written.</td></tr>
+      <tr><td><code>Warning: Invalid DFU suffix signature</code></td><td>Harmless. The image has no DFU suffix.</td></tr>
+      <tr><td>imgtool fails in the post-build step</td><td>Missing <code>cbor2</code> or <code>dilithium-py</code>: install MCUboot's <code>scripts/requirements.txt</code> (§3).</td></tr>
+      <tr><td>J-Link verify passes but the data looks old</td><td>J-Link can answer reads from its cache. Compare after a reset, or read with a fresh connection.</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="s10">
+  <h2 class="sec"><span class="n">10</span>Limits, and the way to a product</h2>
+  <p>This setup proves the update path. It is deliberately open, and these are the gaps to close before anyone else gets a board:</p>
+  <ul class="plain">
+    <li><b>No signature.</b> MCUboot only checks a SHA-256 hash, so any correctly formatted image is accepted. Switch the bootloader to ECDSA P-256 with your own key (Part 1, §7.3), and keep the private key off the build machine. See <a href="https://claude.ai/artifact/8h2k8tD5L8FVytc8LcFEU1" target="_blank" rel="noopener">Crypto for secure boot</a>.</li>
+    <li><b>Downgrades are allowed.</b> Turn Downgrade Prevention on once versions only go up.</li>
+    <li><b>Test VID:PID.</b> 1209:0001 is for development. A product needs its own ID.</li>
+    <li><b>Overwrite Only.</b> The old image is gone once the copy starts, so a new image that boots but misbehaves cannot be rolled back. Swap mode keeps the old image until the new one confirms itself, at the cost of slower updates (see <a href="https://claude.ai/artifact/1jR24HJzBZz65ySrt2TJ5c" target="_blank" rel="noopener">Firmware updates on the RA8M2</a>).</li>
+    <li><b>Always in DFU mode.</b> A real product would show its normal USB function and switch to DFU on a DFU_DETACH request or a button.</li>
+    <li><b>One core.</b> CPU1 is not used. Updating two images over DFU would need a second alternate setting or a combined image.</li>
+    <li><b>Not hardened.</b> The bootloader keeps the J-Link port open and the lifecycle state unchanged, which is right for learning (Part 1, §10).</li>
+  </ul>
+</section>
+
+<section id="sources">
+  <h2 class="sec"><span class="n">·</span>Sources and files</h2>
+  <ul class="plain">
+    <li>Renesas EK-RA8M2 example bundle (R20AN0820, FSP 6.4.0): <code>ek_ra8m2/USBX_dfu/USBX_dfu_ek_ra8m2_ep</code>, the base for board, clock, pin and USB settings</li>
+    <li>EK-RA8M2 user's manual (R20UT5451), 5.4.1: J11 and the P500 host/device select</li>
+    <li>Renesas boot firmware for the RA8M2 (R01AN8050), 4.4.3, 6.13, 6.14: USB boot mode and the boundary commands</li>
+    <li>FSP User's Manual: MCUboot Port (rm_mcuboot_port), USBX DFU</li>
+    <li>USB Device Firmware Upgrade specification 1.1; <a href="https://dfu-util.sourceforge.net/" target="_blank" rel="noopener">dfu-util</a> (Windows needs the WinUSB driver); <a href="https://zadig.akeo.ie/" target="_blank" rel="noopener">Zadig</a></li>
+    <li>Workspace files: <code>HANDOVER.md</code>, <code>scripts/</code> (generator, headless build, flash, DFU, boundary, udev rule; <code>flash_jlink.ps1</code> and <code>dfu_update.ps1</code> for Windows)</li>
+  </ul>
+</section>
+
+<footer>
+  <p>Part 2 of <b>MCUboot upload methods on the EK-RA8M2</b>. <a href="https://claude.ai/artifact/Ufz8vLw3LGDswtSXg8czHB" target="_blank" rel="noopener">Part 1</a> covers the debugger route from R11AN1099, with a <a href="https://claude.ai/artifact/6stWK5S9gDs1iaEknV66g8" target="_blank" rel="noopener">bench checklist</a>.</p>
+  <p>Written 2026-10-20 from the run on the board that day. Numbers and log lines are copied from that run. Windows steps added 2026-10-21, not yet run.</p>
+</footer>
+</main>
+</div>
+
+<script>
+(function () {
+  var heads = document.querySelectorAll("h2.sec");
+  var lists = [document.getElementById("toc"), document.getElementById("toc2")];
+  var railLinks = [];
+  heads.forEach(function (h) {
+    var id = h.parentNode.id;
+    var n = h.querySelector(".n").textContent;
+    var copy = h.cloneNode(true); copy.removeChild(copy.querySelector(".n"));
+    lists.forEach(function (ol, li) {
+      var item = document.createElement("li");
+      var a = document.createElement("a");
+      a.href = "#" + id;
+      var ns = document.createElement("span"); ns.className = "n"; ns.textContent = n;
+      var ts = document.createElement("span"); ts.innerHTML = copy.innerHTML;
+      a.appendChild(ns); a.appendChild(ts);
+      item.appendChild(a); ol.appendChild(item);
+      if (li === 0) railLinks.push({ id: id, a: a });
+    });
+  });
+  if (!("IntersectionObserver" in window)) return;
+  var targets = railLinks.map(function (r) { return document.getElementById(r.id); });
+  var cur = null;
+  var io = new IntersectionObserver(function () {
+    var best = null;
+    targets.forEach(function (t, i) { if (t.getBoundingClientRect().top < window.innerHeight * 0.3) best = i; });
+    if (best === null) best = 0;
+    if (cur !== best) {
+      if (cur !== null) railLinks[cur].a.classList.remove("cur");
+      railLinks[best].a.classList.add("cur"); cur = best;
+    }
+  }, { rootMargin: "0px 0px -70% 0px", threshold: [0, 1] });
+  targets.forEach(function (t) { io.observe(t); });
+})();
+</script>
+
+</body></html>
